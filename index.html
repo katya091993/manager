@@ -213,7 +213,7 @@ body{min-height:100vh}
     <div class="logo-ic">👑</div>
     <h1>Лайв-казино <span>/ Система руководителя</span></h1>
   </div>
-  <div class="hdr-r">
+  <div class="hdr-r"><span id="syncIndicator" style="font-size:10px;font-weight:700;color:var(--text3);white-space:nowrap">☁️ Firebase</span>
     <span class="date-chip" id="datechip" onclick="openDpOverlay()">📅 <span id="datechip-txt"></span></span>
     <button class="hdr-btn" id="notifBtn" onclick="toggleNotif()">🔔 <span id="notifLbl">Уведомления</span></button>
     <button class="hdr-btn" onclick="testAlert()">▶ Тест</button>
@@ -397,7 +397,10 @@ var CL_DATA = [
 var SK = 'mgr_v5';
 var ST = {done:{}, cl:{}, notif:false, rems:{}, _fired:{}};
 (function() { try { var r=localStorage.getItem(SK); if(r) ST=JSON.parse(r); if(!ST._fired) ST._fired={}; } catch(e) {} })();
-function save() { try { localStorage.setItem(SK, JSON.stringify(ST)); } catch(e) {} }
+function save() {
+  try { localStorage.setItem(SK, JSON.stringify(ST)); } catch(e) {}
+  pushToFirebase();
+}
 
 // ── UTILS ─────────────────────────────────────────────────────────
 function esc(s) { return s ? s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }
@@ -869,6 +872,112 @@ async function toggleNotif() {
     else notify('warn','Отказано','');
   } else { ST.notif=false; save(); updateNotifUI(); notify('info','Выключено','',3000); }
 }
+
+// ── FIREBASE SYNC ─────────────────────────────────────────────────
+var FB_CFG = {
+  apiKey: "AIzaSyB7Ean5vnuwP_a_oqjbBushwy-GSw-Obv8",
+  authDomain: "manager-app-3a8cc.firebaseapp.com",
+  databaseURL: "https://manager-app-3a8cc-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "manager-app-3a8cc",
+  storageBucket: "manager-app-3a8cc.firebasestorage.app",
+  messagingSenderId: "590082100351",
+  appId: "1:590082100351:web:4492467aa7961ea3cc434a"
+};
+
+var fbApp = null, fbDb = null, fbRef = null;
+var FB_PATH = 'mgr_data';
+var _syncTimeout = null;
+var _lastRemote = null;
+
+function initFirebase() {
+  try {
+    firebase.initializeApp(FB_CFG);
+    fbDb = firebase.database();
+    fbRef = fbDb.ref(FB_PATH);
+
+    // Show sync indicator
+    showSyncStatus('connecting');
+
+    // Listen for remote changes
+    fbRef.on('value', function(snapshot) {
+      var data = snapshot.val();
+      if (!data) {
+        // First time - push local data to Firebase
+        pushToFirebase();
+        return;
+      }
+      // Only update if data is newer than what we have
+      if (_lastRemote !== JSON.stringify(data)) {
+        _lastRemote = JSON.stringify(data);
+        // Merge remote into local state
+        if (data.done)  ST.done  = data.done;
+        if (data.cl)    ST.cl    = data.cl;
+        if (data.rems)  ST.rems  = data.rems;
+        if (data._fired)ST._fired= data._fired;
+        if (typeof data.notif !== 'undefined') ST.notif = data.notif;
+        // Save to localStorage too
+        try { localStorage.setItem(SK, JSON.stringify(ST)); } catch(e) {}
+        // Re-render current views
+        renderToday();
+        renderCalendar();
+        renderCL();
+        if (selDate) renderDayPanel(selDate);
+        showSyncStatus('synced');
+      }
+    }, function(err) {
+      showSyncStatus('error');
+    });
+
+    showSyncStatus('connected');
+  } catch(e) {
+    console.log('Firebase init error:', e);
+    showSyncStatus('offline');
+  }
+}
+
+function pushToFirebase() {
+  if (!fbRef) return;
+  clearTimeout(_syncTimeout);
+  _syncTimeout = setTimeout(function() {
+    var data = {
+      done:  ST.done  || {},
+      cl:    ST.cl    || {},
+      rems:  ST.rems  || {},
+      _fired:ST._fired|| {},
+      notif: ST.notif || false,
+      _ts:   Date.now()
+    };
+    _lastRemote = JSON.stringify(data);
+    fbRef.set(data).then(function() {
+      showSyncStatus('synced');
+    }).catch(function(e) {
+      showSyncStatus('error');
+    });
+  }, 800);
+}
+
+// Sync indicator in header
+function showSyncStatus(status) {
+  var el = document.getElementById('syncIndicator');
+  if (!el) return;
+  var states = {
+    connecting: {text: '🔄 Подключение...', color: '#f0a44a'},
+    connected:  {text: '☁️ Firebase',       color: '#4ede8a'},
+    synced:     {text: '✓ Синхронизировано',color: '#4ede8a'},
+    error:      {text: '⚠️ Ошибка синхр.',  color: '#ff5c7a'},
+    offline:    {text: '📵 Офлайн',         color: '#8b91b3'},
+  };
+  var s = states[status] || states.offline;
+  el.textContent = s.text;
+  el.style.color = s.color;
+}
+
+</script>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script>
+  window.addEventListener('load', function() { setTimeout(initFirebase, 500); });
 </script>
 </body>
 </html>
