@@ -556,7 +556,7 @@ const ws=(ei,wi)=>ST[ei][wi];
 const SK='lc_v10';
 let stmr=null;
 function ssi(s){const el=document.getElementById('si');if(!el)return;el.className='save-badge'+' '+s;el.innerHTML=s==='saving'?'<i class="ti ti-loader"></i> Сохраняем...':s==='saved'?'<i class="ti ti-device-floppy"></i> Сохранено':'<i class="ti ti-alert-circle"></i> Ошибка';}
-function sv(){clearTimeout(stmr);ssi('saving');stmr=setTimeout(()=>{try{localStorage.setItem(SK,JSON.stringify({ST,EV,NO,CR,slt,cm}));ssi('saved');}catch(e){ssi('error');}},700);}
+function sv(){clearTimeout(stmr);ssi('saving');stmr=setTimeout(()=>{try{localStorage.setItem(SK,JSON.stringify({ST,EV,NO,CR,slt,cm}));ssi('saved');}catch(e){ssi('error');}setTimeout(_fbPush,300);},700);}
 function ld(){try{const r=localStorage.getItem(SK);if(!r)return;const d=JSON.parse(r);if(d.ST)ST=d.ST;if(d.EV)EV=d.EV;if(d.NO){if(Array.isArray(d.NO)){NO=d.NO;}else{NO=Object.values(d.NO);}while(NO.length<EMP.length)NO.push([]);NO.forEach((n,i)=>{if(!Array.isArray(n))NO[i]=[];});}if(d.CR)CR=d.CR;if(d.slt)slt=d.slt;if(d.cm!=null)cm=d.cm;for(let m=0;m<12;m++){if(!EV[m])EV[m]=EMP.map(()=>CR.map(()=>0));EMP.forEach((_,ei)=>{if(!EV[m][ei])EV[m][ei]=CR.map(()=>0);while(EV[m][ei].length<CR.length)EV[m][ei].push(0);});}}catch(e){}}
 (function init(){ld();if(!Array.isArray(NO)){try{NO=Array.from({length:EMP.length},()=>[]);}catch(e){}}while(NO.length<EMP.length)NO.push([]);document.getElementById('ms').value=cm;const sel=document.getElementById('nfe');EMP.forEach((e,i)=>{const o=document.createElement('option');o.value=i;o.textContent=e.name;sel.appendChild(o);});rwt();rss();rg();rsm();rc();re();ugb();document.getElementById('lo').style.display='none';document.getElementById('app').style.display='block';})();
 function st(id,el){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.ntab').forEach(t=>t.classList.remove('active'));document.getElementById('page-'+id).classList.add('active');el.classList.add('active');if(id==='individual')ri();if(id==='notes')rnp();if(id==='summary')rsm();if(id==='eval'){rc();re();}if(id==='meeting')renderMeeting();if(id==='analysis')renderAnalysis();}
@@ -902,6 +902,7 @@ var GRADE_COL = {
 
 function svExt() {
   try { localStorage.setItem("lc_analysis", JSON.stringify({GRADES:GRADES,RECS:RECS,CHARS:CHARS,SHIFTS:SHIFTS})); } catch(e) {}
+  setTimeout(_fbPush, 300);
 }
 function ldExt() {
   try {
@@ -1565,6 +1566,58 @@ svExt = function() {
   } catch(e) {}
 })();
 
+
+// ── FIREBASE SYNC ──────────────────────────────────────────
+var _fbDB = null;
+
+function _fbInit() {
+  if (_fbDB) return;
+  try {
+    firebase.initializeApp({
+      apiKey: "AIzaSyB7Ean5vnuwP_a_oqjbBushwy-GSw-Obv8",
+      authDomain: "manager-app-3a8cc.firebaseapp.com",
+      databaseURL: "https://manager-app-3a8cc-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "manager-app-3a8cc",
+      storageBucket: "manager-app-3a8cc.firebasestorage.app",
+      messagingSenderId: "590082100351",
+      appId: "1:590082100351:web:4492467aa7961ea3cc434a"
+    });
+  } catch(e) {}
+  try { _fbDB = firebase.database(); } catch(e) { console.log('FB db error:', e); }
+}
+
+function _fbPush() {
+  try {
+    _fbInit();
+    if (!_fbDB) { console.log('FB not ready'); return; }
+    var analysis = {};
+    try { analysis = JSON.parse(localStorage.getItem('lc_analysis') || '{}'); } catch(e) {}
+    var emp = EMP.slice();
+    try { var e2 = JSON.parse(localStorage.getItem('lc_emp')); if(e2&&e2.length) emp=e2; } catch(e) {}
+    var data = {
+      ST: ST, EV: EV, NO: NO, CR: CR, slt: slt, cm: cm,
+      EMP: emp,
+      GRADES: analysis.GRADES || {},
+      RECS:   analysis.RECS   || {},
+      CHARS:  analysis.CHARS  || {},
+      SHIFTS: analysis.SHIFTS || {},
+      _ts: Date.now()
+    };
+    _fbDB.ref('dashboard_data').set(data).then(function(){
+      console.log('FB push OK');
+    }).catch(function(e){ console.log('FB push error:', e); });
+  } catch(e) { console.log('_fbPush error:', e); }
+}
+
+// Auto-push on load after 2 seconds
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    _fbInit();
+    setTimeout(_fbPush, 1000);
+  }, 1000);
+});
 </script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </body>
 </html>
