@@ -557,7 +557,7 @@ const ws=(ei,wi)=>ST[ei][wi];
 const SK='lc_v10';
 let stmr=null;
 function ssi(s){const el=document.getElementById('si');if(!el)return;el.className='save-badge'+' '+s;el.innerHTML=s==='saving'?'<i class="ti ti-loader"></i> Сохраняем...':s==='saved'?'<i class="ti ti-device-floppy"></i> Сохранено':'<i class="ti ti-alert-circle"></i> Ошибка';}
-function sv(){clearTimeout(stmr);ssi('saving');stmr=setTimeout(()=>{try{localStorage.setItem(SK,JSON.stringify({ST,EV,NO,CR,slt,cm}));ssi('saved');}catch(e){ssi('error');}pushDashboardFB();},700);}
+function sv(){clearTimeout(stmr);ssi('saving');stmr=setTimeout(()=>{try{localStorage.setItem(SK,JSON.stringify({ST,EV,NO,CR,slt,cm,_ts:Date.now()}));ssi('saved');}catch(e){ssi('error');}pushDashboardFB();},700);}
 function ld(){try{const r=localStorage.getItem(SK);if(!r)return;const d=JSON.parse(r);if(d.ST)ST=d.ST;if(d.EV)EV=d.EV;if(d.NO)NO=d.NO;if(d.CR)CR=d.CR;if(d.slt)slt=d.slt;if(d.cm!=null)cm=d.cm;for(let m=0;m<12;m++){if(!EV[m])EV[m]=EMP.map(()=>CR.map(()=>0));EMP.forEach((_,ei)=>{if(!EV[m][ei])EV[m][ei]=CR.map(()=>0);while(EV[m][ei].length<CR.length)EV[m][ei].push(0);});}}catch(e){}}
 (function init(){ld();document.getElementById('ms').value=cm;const sel=document.getElementById('nfe');EMP.forEach((e,i)=>{const o=document.createElement('option');o.value=i;o.textContent=e.name;sel.appendChild(o);});rwt();rss();rg();rsm();rc();re();ugb();document.getElementById('lo').style.display='none';document.getElementById('app').style.display='block';})();
 function st(id,el){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.ntab').forEach(t=>t.classList.remove('active'));document.getElementById('page-'+id).classList.add('active');el.classList.add('active');if(id==='individual')ri();if(id==='notes')rnp();if(id==='summary')rsm();if(id==='eval'){rc();re();}if(id==='meeting')renderMeeting();if(id==='analysis')renderAnalysis();}
@@ -1575,7 +1575,6 @@ var DB_CFG = {
 
 function initDashboardFB() {
   try {
-    // Check if already initialized
     if (firebase.apps && firebase.apps.length > 0) {
       var db = firebase.database();
       _dbRef = db.ref('dashboard_data');
@@ -1584,14 +1583,110 @@ function initDashboardFB() {
       var db = firebase.database();
       _dbRef = db.ref('dashboard_data');
     }
-    // Show sync indicator
     var ind = document.getElementById('fbSyncInd');
-    if (ind) { ind.textContent = '☁️ Firebase'; ind.style.color = '#4ede8a'; }
-    
-    // Initial push of current data
-    pushDashboardFB();
+    if (ind) { ind.textContent = '🔄 Подключение...'; ind.style.color = '#f0a44a'; }
+
+    // Read from Firebase first - if remote is newer, load it
+    _dbRef.once('value').then(function(snap) {
+      var remote = snap.val();
+      if (!remote) {
+        // No remote data - push local
+        if (ind) { ind.textContent = '☁️ Firebase'; ind.style.color = '#4ede8a'; }
+        pushDashboardFB();
+        return;
+      }
+      // Compare timestamps
+      var localTS = 0;
+      try {
+        var localRaw = localStorage.getItem(SK);
+        if (localRaw) {
+          var localData = JSON.parse(localRaw);
+          localTS = localData._ts || 0;
+        }
+      } catch(e) {}
+
+      var remoteTS = remote._ts || 0;
+
+      if (remoteTS > localTS) {
+        // Remote is newer - load from Firebase
+        if (ind) { ind.textContent = '🔄 Загружаю...'; ind.style.color = '#f0a44a'; }
+        applyRemoteData(remote);
+        if (ind) { ind.textContent = '✓ Синхронизировано'; ind.style.color = '#4ede8a'; }
+      } else {
+        // Local is newer or same - push to Firebase
+        if (ind) { ind.textContent = '☁️ Firebase'; ind.style.color = '#4ede8a'; }
+        pushDashboardFB();
+      }
+
+      // Subscribe to real-time updates
+      _dbRef.on('value', function(snap2) {
+        if (_dbLocalUpdate) return;
+        var data = snap2.val();
+        if (!data) return;
+        var str = JSON.stringify(data);
+        if (_dbLastPush === str) return;
+        _dbLastPush = str;
+        applyRemoteData(data);
+        if (ind) { ind.textContent = '✓ Синхронизировано'; ind.style.color = '#4ede8a'; }
+      });
+
+    }).catch(function(e) {
+      console.log('Firebase read error:', e);
+      if (ind) { ind.textContent = '⚠️ Офлайн'; ind.style.color = '#ff5c7a'; }
+      pushDashboardFB();
+    });
+
   } catch(e) {
     console.log('Dashboard Firebase init error:', e);
+    var ind = document.getElementById('fbSyncInd');
+    if (ind) { ind.textContent = '📵 Офлайн'; ind.style.color = '#8b91b3'; }
+  }
+}
+
+function applyRemoteData(data) {
+  try {
+    // Apply main data
+    if (data.ST) ST = data.ST;
+    if (data.EV) EV = data.EV;
+    if (data.NO) NO = data.NO;
+    if (data.CR) CR = data.CR;
+    if (data.slt !== undefined) {
+      slt = data.slt;
+      var msEl = document.getElementById('ms');
+      if (msEl) msEl.value = slt;
+    }
+    if (data.cm != null) cm = data.cm;
+
+    // Apply analysis data
+    if (data.GRADES) GRADES = data.GRADES;
+    if (data.RECS)   RECS   = data.RECS;
+    if (data.CHARS)  CHARS  = data.CHARS;
+    if (data.SHIFTS) SHIFTS = data.SHIFTS;
+
+    // Apply employees if changed
+    if (data.EMP && data.EMP.length > 0) {
+      EMP.length = 0;
+      data.EMP.forEach(function(e) { EMP.push(e); });
+    }
+
+    // Save to localStorage
+    try {
+      localStorage.setItem(SK, JSON.stringify({ST:ST,EV:EV,NO:NO,CR:CR,slt:slt,cm:cm,_ts:data._ts||Date.now()}));
+      localStorage.setItem('lc_analysis', JSON.stringify({GRADES:GRADES,RECS:RECS,CHARS:CHARS,SHIFTS:SHIFTS}));
+      if (data.EMP) localStorage.setItem('lc_emp', JSON.stringify(EMP));
+    } catch(e) {}
+
+    // Re-render everything
+    if (typeof rwt === 'function') rwt();
+    if (typeof rss === 'function') rss();
+    if (typeof rg  === 'function') rg();
+    if (typeof rsm === 'function') rsm();
+    if (typeof rc  === 'function') rc();
+    if (typeof re  === 'function') re();
+    if (typeof ugb === 'function') ugb();
+
+  } catch(e) {
+    console.log('applyRemoteData error:', e);
   }
 }
 
