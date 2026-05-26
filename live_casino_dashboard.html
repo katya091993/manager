@@ -1645,11 +1645,23 @@ function initDashboardFB() {
 
 function applyRemoteData(data) {
   try {
-    // Apply main data
-    if (data.ST) ST = data.ST;
-    if (data.EV) EV = data.EV;
-    if (data.NO) NO = data.NO;
-    if (data.CR) CR = data.CR;
+    // ST, EV, NO, CR declared as 'let' - must mutate, not reassign
+    if (data.ST && Array.isArray(data.ST)) {
+      ST.length = 0;
+      data.ST.forEach(function(row) { ST.push(row); });
+    }
+    if (data.EV && Array.isArray(data.EV)) {
+      EV.length = 0;
+      data.EV.forEach(function(row) { EV.push(row); });
+    }
+    if (data.NO && Array.isArray(data.NO)) {
+      NO.length = 0;
+      data.NO.forEach(function(row) { NO.push(row); });
+    }
+    if (data.CR && Array.isArray(data.CR)) {
+      CR.length = 0;
+      data.CR.forEach(function(row) { CR.push(row); });
+    }
     if (data.slt !== undefined) {
       slt = data.slt;
       var msEl = document.getElementById('ms');
@@ -1657,14 +1669,14 @@ function applyRemoteData(data) {
     }
     if (data.cm != null) cm = data.cm;
 
-    // Apply analysis data
+    // GRADES, RECS, CHARS, SHIFTS are 'var' - can reassign
     if (data.GRADES) GRADES = data.GRADES;
     if (data.RECS)   RECS   = data.RECS;
     if (data.CHARS)  CHARS  = data.CHARS;
     if (data.SHIFTS) SHIFTS = data.SHIFTS;
 
-    // Apply employees if changed
-    if (data.EMP && data.EMP.length > 0) {
+    // EMP is 'const' - must mutate
+    if (data.EMP && Array.isArray(data.EMP) && data.EMP.length > 0) {
       EMP.length = 0;
       data.EMP.forEach(function(e) { EMP.push(e); });
     }
