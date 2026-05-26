@@ -1629,13 +1629,18 @@ window.addEventListener('load', function() {
       var remoteTS = remote._ts || 0;
       console.log('Local TS:', localTS, 'Remote TS:', remoteTS);
 
-      if (remoteTS > localTS + 5000) {
-        // Remote is newer by more than 5 seconds - load it
-        console.log('Loading from Firebase...');
+      if (localTS === 0) {
+        // No local data at all - this is a new device, load from Firebase
+        console.log('New device - loading from Firebase...');
         _fbApply(remote);
+      } else if (remoteTS > localTS + 30000) {
+        // Remote is newer by more than 30 seconds AND local exists
+        // Show sync button instead of auto-applying
+        _showSyncBanner(remote, remoteTS);
+        _fbPush();
       } else {
-        // Local is newer - push to Firebase
-        console.log('Pushing to Firebase...');
+        // Local is same or newer - push to Firebase  
+        console.log('Local is current - pushing to Firebase...');
         _fbPush();
       }
     }).catch(function(e) {
@@ -1644,6 +1649,23 @@ window.addEventListener('load', function() {
     });
   }, 1500);
 });
+
+function _showSyncBanner(remoteData, remoteTS) {
+  // Show a banner asking user to sync
+  var existing = document.getElementById('fbSyncBanner');
+  if (existing) return;
+  var banner = document.createElement('div');
+  banner.id = 'fbSyncBanner';
+  banner.style.cssText = 'position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:999;background:#1e2235;border:1px solid rgba(108,99,255,.5);border-radius:12px;padding:12px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.4);font-family:Manrope,sans-serif';
+  var dt = new Date(remoteTS).toLocaleString('ru');
+  banner.innerHTML = '<span style="font-size:13px;color:#e8eaf6">☁️ Есть данные из Firebase от <strong>'+dt+'</strong></span>' +
+    '<button onclick="_fbApply(window._fbRemoteData);document.getElementById('fbSyncBanner').remove()" ' +
+    'style="background:#6c63ff;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:Manrope,sans-serif">Загрузить</button>' +
+    '<button onclick="document.getElementById('fbSyncBanner').remove()" ' +
+    'style="background:#1e2235;color:#8b91b3;border:1px solid #2a2f45;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;font-family:Manrope,sans-serif">Оставить своё</button>';
+  window._fbRemoteData = remoteData;
+  document.body.appendChild(banner);
+}
 
 function _fbApply(data) {
   try {
