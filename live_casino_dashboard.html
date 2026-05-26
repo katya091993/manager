@@ -1575,11 +1575,12 @@ var DB_CFG = {
 
 function initDashboardFB() {
   try {
-    if (firebase.apps && firebase.apps.length > 0) {
-      var db = firebase.database();
-      _dbRef = db.ref('dashboard_data');
-    } else {
-      firebase.initializeApp(DB_CFG);
+    if (!_dbRef) {
+      try {
+        firebase.initializeApp(DB_CFG);
+      } catch(initErr) {
+        // Already initialized - get existing app
+      }
       var db = firebase.database();
       _dbRef = db.ref('dashboard_data');
     }
