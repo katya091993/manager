@@ -1650,20 +1650,33 @@ window.addEventListener('load', function() {
   }, 1500);
 });
 
+function _closeSyncBanner() {
+  var b = document.getElementById('fbSyncBanner'); if(b) b.remove();
+}
+function _applySyncBanner() {
+  _fbApply(window._fbRemoteData); _closeSyncBanner();
+}
 function _showSyncBanner(remoteData, remoteTS) {
-  // Show a banner asking user to sync
-  var existing = document.getElementById('fbSyncBanner');
-  if (existing) return;
+  if (document.getElementById('fbSyncBanner')) return;
+  window._fbRemoteData = remoteData;
   var banner = document.createElement('div');
   banner.id = 'fbSyncBanner';
   banner.style.cssText = 'position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:999;background:#1e2235;border:1px solid rgba(108,99,255,.5);border-radius:12px;padding:12px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.4);font-family:Manrope,sans-serif';
   var dt = new Date(remoteTS).toLocaleString('ru');
-  banner.innerHTML = '<span style="font-size:13px;color:#e8eaf6">☁️ Есть данные из Firebase от <strong>'+dt+'</strong></span>' +
-    '<button onclick="_fbApply(window._fbRemoteData);document.getElementById('fbSyncBanner').remove()" ' +
-    'style="background:#6c63ff;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:Manrope,sans-serif">Загрузить</button>' +
-    '<button onclick="document.getElementById('fbSyncBanner').remove()" ' +
-    'style="background:#1e2235;color:#8b91b3;border:1px solid #2a2f45;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;font-family:Manrope,sans-serif">Оставить своё</button>';
-  window._fbRemoteData = remoteData;
+  var span = document.createElement('span');
+  span.style.cssText = 'font-size:13px;color:#e8eaf6';
+  span.innerHTML = '&#9729;&#65039; Данные из Firebase от <strong>' + dt + '</strong>';
+  var btn1 = document.createElement('button');
+  btn1.textContent = 'Загрузить';
+  btn1.style.cssText = 'background:#6c63ff;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:Manrope,sans-serif';
+  btn1.onclick = _applySyncBanner;
+  var btn2 = document.createElement('button');
+  btn2.textContent = 'Оставить своё';
+  btn2.style.cssText = 'background:#1e2235;color:#8b91b3;border:1px solid #2a2f45;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;font-family:Manrope,sans-serif';
+  btn2.onclick = _closeSyncBanner;
+  banner.appendChild(span);
+  banner.appendChild(btn1);
+  banner.appendChild(btn2);
   document.body.appendChild(banner);
 }
 
