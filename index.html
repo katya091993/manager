@@ -1071,13 +1071,20 @@ function renderReport(data) {
 
   var MN2 = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
   var now = new Date();
-  var monthName = MN2[data.slt !== undefined ? data.slt : now.getMonth()];
+  var sltNum = data.slt !== undefined ? parseInt(data.slt) : now.getMonth();
+  var monthName = MN2[sltNum] || MN2[now.getMonth()];
 
   var emps = data.EMP || [];
-  var ST2 = data.ST || [];
-  var EV2 = data.EV || [];
-  var NO2 = data.NO || [];
-  var CR2 = data.CR || [];
+  // Firebase may return objects instead of arrays - convert
+  function toArr(x) {
+    if(!x) return [];
+    if(Array.isArray(x)) return x;
+    return Object.values(x);
+  }
+  var ST2 = toArr(data.ST).map(function(w){ return toArr(w); });
+  var EV2 = toArr(data.EV).map(function(m){ return toArr(m).map(function(ei){ return toArr(ei); }); });
+  var NO2 = toArr(data.NO).map(function(n){ return toArr(n); });
+  var CR2 = toArr(data.CR);
   var GRADES2 = data.GRADES || {};
   var RECS2 = data.RECS || {};
   var SHIFTS2 = data.SHIFTS || {};
@@ -1097,7 +1104,14 @@ function renderReport(data) {
     var checklistPct = tasksTotal ? Math.round(tasksDone / tasksTotal * 100) : 0;
 
     // Evaluation score
-    var ev = EV2[ei] || [];
+    // EV structure: EV[month][ei][criterion] - get current month
+    var ev = [];
+    if(Array.isArray(EV2) && EV2[sltNum] && Array.isArray(EV2[sltNum])) {
+      ev = toArr(EV2[sltNum][ei]) || [];
+    } else if(Array.isArray(EV2) && Array.isArray(EV2[ei])) {
+      // Fallback: EV2[ei] if old format
+      ev = EV2[ei] || [];
+    }
     var cr = CR2 || [];
     var evalScore = 0, evalWeight = 0;
     ev.forEach(function(score, ci) {
