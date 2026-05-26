@@ -556,7 +556,7 @@ const ws=(ei,wi)=>ST[ei][wi];
 const SK='lc_v10';
 let stmr=null;
 function ssi(s){const el=document.getElementById('si');if(!el)return;el.className='save-badge'+' '+s;el.innerHTML=s==='saving'?'<i class="ti ti-loader"></i> Сохраняем...':s==='saved'?'<i class="ti ti-device-floppy"></i> Сохранено':'<i class="ti ti-alert-circle"></i> Ошибка';}
-function sv(){clearTimeout(stmr);ssi('saving');stmr=setTimeout(()=>{try{localStorage.setItem(SK,JSON.stringify({ST,EV,NO,CR,slt,cm}));ssi('saved');}catch(e){ssi('error');}setTimeout(_fbPush,300);},700);}
+function sv(){clearTimeout(stmr);ssi('saving');stmr=setTimeout(()=>{try{localStorage.setItem(SK,JSON.stringify({ST,EV,NO,CR,slt,cm,_ts:Date.now()}));ssi('saved');}catch(e){ssi('error');}setTimeout(_fbPush,300);},700);}
 function ld(){try{const r=localStorage.getItem(SK);if(!r)return;const d=JSON.parse(r);if(d.ST)ST=d.ST;if(d.EV)EV=d.EV;if(d.NO){if(Array.isArray(d.NO)){NO=d.NO;}else{NO=Object.values(d.NO);}while(NO.length<EMP.length)NO.push([]);NO.forEach((n,i)=>{if(!Array.isArray(n))NO[i]=[];});}if(d.CR)CR=d.CR;if(d.slt)slt=d.slt;if(d.cm!=null)cm=d.cm;for(let m=0;m<12;m++){if(!EV[m])EV[m]=EMP.map(()=>CR.map(()=>0));EMP.forEach((_,ei)=>{if(!EV[m][ei])EV[m][ei]=CR.map(()=>0);while(EV[m][ei].length<CR.length)EV[m][ei].push(0);});}}catch(e){}}
 (function init(){ld();if(!Array.isArray(NO)){try{NO=Array.from({length:EMP.length},()=>[]);}catch(e){}}while(NO.length<EMP.length)NO.push([]);document.getElementById('ms').value=cm;const sel=document.getElementById('nfe');EMP.forEach((e,i)=>{const o=document.createElement('option');o.value=i;o.textContent=e.name;sel.appendChild(o);});rwt();rss();rg();rsm();rc();re();ugb();document.getElementById('lo').style.display='none';document.getElementById('app').style.display='block';})();
 function st(id,el){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.ntab').forEach(t=>t.classList.remove('active'));document.getElementById('page-'+id).classList.add('active');el.classList.add('active');if(id==='individual')ri();if(id==='notes')rnp();if(id==='summary')rsm();if(id==='eval'){rc();re();}if(id==='meeting')renderMeeting();if(id==='analysis')renderAnalysis();}
@@ -1609,13 +1609,107 @@ function _fbPush() {
   } catch(e) { console.log('_fbPush error:', e); }
 }
 
-// Auto-push on load after 2 seconds
+// On load: compare timestamps, load newer data
 window.addEventListener('load', function() {
   setTimeout(function() {
     _fbInit();
-    setTimeout(_fbPush, 1000);
-  }, 1000);
+    if (!_fbDB) { setTimeout(_fbPush, 1000); return; }
+
+    _fbDB.ref('dashboard_data').once('value').then(function(snap) {
+      var remote = snap.val();
+      if (!remote) { _fbPush(); return; }
+
+      // Get local timestamp
+      var localTS = 0;
+      try {
+        var raw = localStorage.getItem('lc_v10');
+        if (raw) { var d = JSON.parse(raw); localTS = d._ts || 0; }
+      } catch(e) {}
+
+      var remoteTS = remote._ts || 0;
+      console.log('Local TS:', localTS, 'Remote TS:', remoteTS);
+
+      if (remoteTS > localTS + 5000) {
+        // Remote is newer by more than 5 seconds - load it
+        console.log('Loading from Firebase...');
+        _fbApply(remote);
+      } else {
+        // Local is newer - push to Firebase
+        console.log('Pushing to Firebase...');
+        _fbPush();
+      }
+    }).catch(function(e) {
+      console.log('FB read error:', e);
+      _fbPush();
+    });
+  }, 1500);
 });
+
+function _fbApply(data) {
+  try {
+    // Mutate arrays (let/const variables)
+    if (data.ST) {
+      var st2 = Array.isArray(data.ST) ? data.ST : Object.values(data.ST);
+      ST.length = 0;
+      st2.forEach(function(row) { ST.push(Array.isArray(row) ? row : Object.values(row)); });
+    }
+    if (data.EV) {
+      var ev2 = Array.isArray(data.EV) ? data.EV : Object.values(data.EV);
+      EV.length = 0;
+      ev2.forEach(function(month) {
+        var m2 = Array.isArray(month) ? month : Object.values(month);
+        EV.push(m2.map(function(ei) { return Array.isArray(ei) ? ei : Object.values(ei||{}); }));
+      });
+    }
+    if (data.NO) {
+      var no2 = Array.isArray(data.NO) ? data.NO : Object.values(data.NO);
+      NO.length = 0;
+      no2.forEach(function(n) { NO.push(Array.isArray(n) ? n : Object.values(n||{})); });
+    }
+    if (data.CR) {
+      var cr2 = Array.isArray(data.CR) ? data.CR : Object.values(data.CR);
+      CR.length = 0;
+      cr2.forEach(function(r) { CR.push(r); });
+    }
+    if (data.slt !== undefined) slt = parseInt(data.slt) || 0;
+    if (data.cm != null) cm = data.cm;
+    if (data.EMP && data.EMP.length > 0) {
+      var emp2 = Array.isArray(data.EMP) ? data.EMP : Object.values(data.EMP);
+      EMP.length = 0;
+      emp2.forEach(function(e) { EMP.push(e); });
+    }
+    if (data.GRADES) GRADES = Array.isArray(data.GRADES) ? data.GRADES : Object.values(data.GRADES);
+    if (data.RECS)   RECS   = Array.isArray(data.RECS)   ? data.RECS   : Object.values(data.RECS);
+    if (data.CHARS)  CHARS  = Array.isArray(data.CHARS)  ? data.CHARS  : Object.values(data.CHARS);
+    if (data.SHIFTS) SHIFTS = Array.isArray(data.SHIFTS) ? data.SHIFTS : Object.values(data.SHIFTS);
+
+    // Ensure arrays match EMP length
+    while(NO.length < EMP.length) NO.push([]);
+    while(ST.length < EMP.length) ST.push(Array.from({length:6},function(){return {tasks:[],tt:[],s:0,p:0,e:0,cm:''}}));
+
+    // Save to localStorage
+    try {
+      localStorage.setItem('lc_v10', JSON.stringify({ST:ST,EV:EV,NO:NO,CR:CR,slt:slt,cm:cm,_ts:data._ts||Date.now()}));
+      localStorage.setItem('lc_analysis', JSON.stringify({GRADES:GRADES,RECS:RECS,CHARS:CHARS,SHIFTS:SHIFTS}));
+      if (data.EMP) localStorage.setItem('lc_emp', JSON.stringify(EMP));
+    } catch(e) {}
+
+    // Re-render
+    try {
+      var msEl = document.getElementById('ms');
+      if (msEl) msEl.value = slt;
+      if(typeof rwt==='function') rwt();
+      if(typeof rss==='function') rss();
+      if(typeof rg ==='function') rg();
+      if(typeof rsm==='function') rsm();
+      if(typeof rc ==='function') rc();
+      if(typeof re ==='function') re();
+      if(typeof ugb==='function') ugb();
+    } catch(e) { console.log('render error:', e); }
+
+    console.log('Firebase data applied!');
+  } catch(e) { console.log('_fbApply error:', e); }
+}
 </script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
