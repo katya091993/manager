@@ -250,6 +250,40 @@ body{min-height:100vh}
 .alert-t{font-size:12px;font-weight:700;margin-bottom:2px}
 .alert-s{font-size:11px;color:var(--text2);line-height:1.4}
 .alert-x{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;flex-shrink:0;font-family:inherit;padding:0}
+
+/* REPORT */
+.report-wrap{max-width:900px}
+.report-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.report-btn{display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:9px;border:none;font-family:'Manrope',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s}
+.report-btn.primary{background:var(--acc);color:#fff}
+.report-btn.primary:hover{background:var(--acc2)}
+.report-btn.secondary{background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
+.report-status{font-size:11px;color:var(--text3);font-weight:600}
+.report-section{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:14px}
+.report-sec-hdr{padding:12px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
+.report-sec-body{padding:14px 16px}
+.report-emp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.report-emp-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:13px 14px}
+.report-emp-name{font-size:13px;font-weight:700;margin-bottom:3px}
+.report-emp-role{font-size:11px;color:var(--text3);margin-bottom:10px}
+.report-emp-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px}
+.res{text-align:center;background:var(--bg4);border-radius:7px;padding:6px 4px}
+.res .rv{font-size:16px;font-weight:800;line-height:1}
+.res .rl{font-size:9px;color:var(--text3);margin-top:2px;text-transform:uppercase;letter-spacing:.3px}
+.report-bar-wrap{margin-top:8px}
+.report-bar-lbl{display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:4px;font-weight:600}
+.report-bar-track{height:6px;background:var(--bg4);border-radius:6px;overflow:hidden}
+.report-bar-fill{height:100%;border-radius:6px}
+.report-summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.rsg{background:var(--bg3);border-radius:10px;padding:12px 14px;text-align:center}
+.rsg .rv{font-size:24px;font-weight:800;line-height:1}
+.rsg .rl{font-size:10px;color:var(--text3);margin-top:4px;font-weight:600}
+.report-notes-list{display:flex;flex-direction:column;gap:6px}
+.rn{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;background:var(--bg3);border-radius:8px;border-left:3px solid var(--border)}
+.rn-body{flex:1;font-size:12px;color:var(--text2);line-height:1.4}
+.rn-body strong{color:var(--text);font-weight:700}
+.rn-date{font-size:10px;color:var(--text3);flex-shrink:0}
+@media print{.hdr,.nav,.report-toolbar{display:none!important}.page{padding:0!important}.report-section{break-inside:avoid}}
 ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 @media(max-width:580px){.page{padding:14px}.clevels{grid-template-columns:1fr}.logo span{display:none}}
 @media(hover:none){.kb-card-btns{opacity:1!important}}
@@ -277,6 +311,7 @@ body{min-height:100vh}
   <span class="tab" onclick="goTab('cl',this)">✅ Чек-лист</span>
   <span class="tab" onclick="goTab('kanban',this)">📌 Канбан</span>
   <span class="tab" onclick="goTab('notes',this)">⚡ Заметки</span>
+  <span class="tab" onclick="goTab('report',this);loadReport()">📊 Отчёт</span>
 </nav>
 
 <div class="page on" id="pg-today">
@@ -345,6 +380,20 @@ body{min-height:100vh}
   </div>
   <div id="clBody"></div>
   <button class="reset-btn" onclick="resetCL()">🔄 Сбросить для нового месяца</button>
+</div>
+
+
+<!-- REPORT -->
+<div class="page" id="pg-report">
+  <div class="stitle">📊 Отчёт за месяц <div class="stline"></div></div>
+  <div class="report-wrap">
+    <div class="report-toolbar">
+      <button class="report-btn primary" onclick="loadReport()">🔄 Загрузить из дашборда</button>
+      <button class="report-btn secondary" onclick="printReport()">🖨️ Печать / PDF</button>
+      <span class="report-status" id="reportStatus">Нажми «Загрузить» чтобы получить данные из дашборда</span>
+    </div>
+    <div id="reportContent"></div>
+  </div>
 </div>
 
 <div class="page" id="pg-kanban">
@@ -991,8 +1040,216 @@ async function toggleNotif(){
   }else{ST.notif=false;save();updateNotifUI();notify('info','Выключено','',3000);}
 }
 
+// ── REPORT ────────────────────────────────────────────────────────
+var REPORT_DATA = null;
+
+function loadReport() {
+  var status = document.getElementById('reportStatus');
+  if(status) status.textContent = '🔄 Загружаю данные из дашборда...';
+  if(!fbRef) {
+    if(status) status.textContent = '⚠️ Firebase не подключён. Подожди секунду и повтори.';
+    return;
+  }
+  var dbRef = firebase.database().ref('dashboard_data');
+  dbRef.once('value').then(function(snap) {
+    var data = snap.val();
+    if(!data) {
+      if(status) status.textContent = '❌ Нет данных. Открой дашборд и внеси данные.';
+      return;
+    }
+    REPORT_DATA = data;
+    if(status) status.textContent = '✅ Данные загружены: ' + new Date(data._ts||Date.now()).toLocaleString('ru');
+    renderReport(data);
+  }).catch(function(e) {
+    if(status) status.textContent = '❌ Ошибка загрузки: ' + e.message;
+  });
+}
+
+function renderReport(data) {
+  var container = document.getElementById('reportContent');
+  if(!container) return;
+
+  var MN2 = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+  var now = new Date();
+  var monthName = MN2[data.slt !== undefined ? data.slt : now.getMonth()];
+
+  var emps = data.EMP || [];
+  var ST2 = data.ST || [];
+  var EV2 = data.EV || [];
+  var NO2 = data.NO || [];
+  var CR2 = data.CR || [];
+  var GRADES2 = data.GRADES || {};
+  var RECS2 = data.RECS || {};
+  var SHIFTS2 = data.SHIFTS || {};
+
+  // Calculate per-employee stats
+  var empStats = emps.map(function(emp, ei) {
+    var weeks = ST2[ei] || [];
+    var totalS = 0, totalP = 0, totalE = 0, tasksDone = 0, tasksTotal = 0;
+    weeks.forEach(function(w) {
+      if(!w) return;
+      totalS += (w.s || 0);
+      totalP += (w.p || 0);
+      totalE += (w.e || 0);
+      var tasks = w.tasks || [];
+      tasks.forEach(function(t) { tasksTotal++; if(t) tasksDone++; });
+    });
+    var checklistPct = tasksTotal ? Math.round(tasksDone / tasksTotal * 100) : 0;
+
+    // Evaluation score
+    var ev = EV2[ei] || [];
+    var cr = CR2 || [];
+    var evalScore = 0, evalWeight = 0;
+    ev.forEach(function(score, ci) {
+      if(score > 0 && cr[ci]) {
+        var w2 = parseInt(cr[ci].weight) || 0;
+        evalScore += score * w2;
+        evalWeight += w2;
+      }
+    });
+    var evalPct = evalWeight > 0 ? Math.round(evalScore / evalWeight) : 0;
+
+    // Rating formula: eval*40% + checklist*35% + reliability*25%
+    var reliability = Math.max(0, 100 - totalE * 5);
+    var rating = Math.round(evalPct * 0.4 + checklistPct * 0.35 + reliability * 0.25);
+
+    var grade = GRADES2[ei] || '';
+    var notes = NO2[ei] || [];
+
+    return {emp:emp, ei:ei, totalS:totalS, totalP:totalP, totalE:totalE,
+            checklistPct:checklistPct, evalPct:evalPct, rating:rating,
+            grade:grade, notes:notes, reliability:reliability};
+  });
+
+  // Sort by rating desc
+  var sorted = empStats.slice().sort(function(a,b){return b.rating-a.rating;});
+
+  // Total stats
+  var totS = empStats.reduce(function(s,e){return s+e.totalS;},0);
+  var totP = empStats.reduce(function(s,e){return s+e.totalP;},0);
+  var totE = empStats.reduce(function(s,e){return s+e.totalE;},0);
+  var avgRating = empStats.length ? Math.round(empStats.reduce(function(s,e){return s+e.rating;},0)/empStats.length) : 0;
+
+  var ratingColor = function(r) {
+    if(r>=85) return '#60aaff';
+    if(r>=70) return '#4ede8a';
+    if(r>=50) return '#f0a44a';
+    return '#ff5c7a';
+  };
+
+  var gradeLabels = {junior:'Джун', middle:'Мидл', senior:'Синьор'};
+
+  // All notes sorted
+  var allNotes = [];
+  empStats.forEach(function(es) {
+    (es.notes||[]).forEach(function(n) {
+      if(n && n.text) allNotes.push({n:n, name:es.emp.name});
+    });
+  });
+  allNotes.sort(function(a,b){return (b.n.date||'').localeCompare(a.n.date||'');});
+
+  var html = '';
+
+  // Header
+  html += '<div style="background:linear-gradient(135deg,rgba(108,99,255,.2),rgba(180,122,255,.1));border:1px solid rgba(108,99,255,.3);border-radius:var(--r);padding:18px 22px;margin-bottom:14px">' +
+    '<div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Ежемесячный отчёт</div>' +
+    '<div style="font-size:22px;font-weight:800">Лайв-казино · '+monthName+'</div>' +
+    '<div style="font-size:12px;color:var(--text2);margin-top:4px">Сотрудников: '+emps.length+' · Сформирован: '+new Date().toLocaleDateString('ru',{day:'numeric',month:'long',year:'numeric'})+'</div>' +
+  '</div>';
+
+  // Summary
+  html += '<div class="report-section"><div class="report-sec-hdr">📈 Итоги отдела</div><div class="report-sec-body">' +
+    '<div class="report-summary-grid">' +
+    '<div class="rsg"><div class="rv" style="color:var(--blue)">'+totS+'</div><div class="rl">Счетов обработано</div></div>' +
+    '<div class="rsg"><div class="rv" style="color:var(--amber)">'+totP+'</div><div class="rl">Подозрительных выявлено</div></div>' +
+    '<div class="rsg"><div class="rv" style="color:'+(totE>0?'var(--red)':'var(--green)')+'">'+totE+'</div><div class="rl">Ошибок/нарушений</div></div>' +
+    '<div class="rsg"><div class="rv" style="color:'+ratingColor(avgRating)+'">'+avgRating+'%</div><div class="rl">Средний рейтинг</div></div>' +
+    '</div></div></div>';
+
+  // Rating table
+  html += '<div class="report-section"><div class="report-sec-hdr">🏆 Рейтинг сотрудников</div><div class="report-sec-body">' +
+    '<div style="display:flex;flex-direction:column;gap:8px">';
+  sorted.forEach(function(es, rank) {
+    var medals = ['🥇','🥈','🥉'];
+    var medal = rank < 3 ? medals[rank] : (rank+1)+'.';
+    var col = es.emp.col || 'rgba(139,145,179,.3)';
+    html += '<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg3);border-radius:9px;border-left:3px solid '+ratingColor(es.rating)+'">' +
+      '<span style="font-size:16px;width:28px;text-align:center">'+medal+'</span>' +
+      '<div style="flex:1">' +
+        '<div style="font-size:13px;font-weight:700">'+esc(es.emp.name)+'</div>' +
+        '<div style="font-size:11px;color:var(--text3)">'+esc(es.emp.role||'')+(es.grade?' · <span style="color:var(--acc2)">'+esc(gradeLabels[es.grade]||es.grade)+'</span>':'')+'</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:10px;align-items:center">' +
+        '<span style="font-size:10px;color:var(--text3)">Счета: <strong style="color:var(--text)">'+es.totalS+'</strong></span>' +
+        '<span style="font-size:10px;color:var(--text3)">Подозр.: <strong style="color:var(--amber)">'+es.totalP+'</strong></span>' +
+        (es.totalE>0?'<span style="font-size:10px;color:var(--red)">Ошибки: <strong>'+es.totalE+'</strong></span>':'') +
+      '</div>' +
+      '<div style="text-align:center;min-width:60px">' +
+        '<div style="font-size:20px;font-weight:800;color:'+ratingColor(es.rating)+'">'+es.rating+'%</div>' +
+        '<div style="font-size:10px;color:var(--text3)">рейтинг</div>' +
+      '</div>' +
+    '</div>';
+  });
+  html += '</div></div></div>';
+
+  // Employee detail cards
+  html += '<div class="report-section"><div class="report-sec-hdr">👥 Детали по сотрудникам</div><div class="report-sec-body">' +
+    '<div class="report-emp-grid">';
+  empStats.forEach(function(es) {
+    var cp = ratingColor(es.rating);
+    html += '<div class="report-emp-card" style="border-top:3px solid '+cp+'">' +
+      '<div class="report-emp-name">'+esc(es.emp.name)+'</div>' +
+      '<div class="report-emp-role">'+esc(es.emp.role||'')+(es.grade?' · '+esc(gradeLabels[es.grade]||es.grade):'')+'</div>' +
+      '<div class="report-emp-stats">' +
+        '<div class="res"><div class="rv" style="color:var(--blue)">'+es.totalS+'</div><div class="rl">Счетов</div></div>' +
+        '<div class="res"><div class="rv" style="color:var(--amber)">'+es.totalP+'</div><div class="rl">Подозр.</div></div>' +
+        '<div class="res"><div class="rv" style="color:'+(es.totalE>0?'var(--red)':'var(--green)')+'">'+es.totalE+'</div><div class="rl">Ошибки</div></div>' +
+      '</div>' +
+      '<div class="report-bar-wrap"><div class="report-bar-lbl"><span>Чек-лист</span><span>'+es.checklistPct+'%</span></div><div class="report-bar-track"><div class="report-bar-fill" style="width:'+es.checklistPct+'%;background:'+ratingColor(es.checklistPct)+'"></div></div></div>' +
+      '<div class="report-bar-wrap"><div class="report-bar-lbl"><span>Оценка</span><span>'+es.evalPct+'%</span></div><div class="report-bar-track"><div class="report-bar-fill" style="width:'+es.evalPct+'%;background:'+ratingColor(es.evalPct)+'"></div></div></div>' +
+      '<div class="report-bar-wrap"><div class="report-bar-lbl"><span>Итоговый рейтинг</span><span style="color:'+cp+';font-weight:800">'+es.rating+'%</span></div><div class="report-bar-track"><div class="report-bar-fill" style="width:'+es.rating+'%;background:'+cp+'"></div></div></div>' +
+      (RECS2[es.ei] ? '<div style="font-size:11px;color:var(--text2);margin-top:8px;padding:6px 8px;background:var(--bg4);border-radius:6px;line-height:1.4">'+esc(RECS2[es.ei])+'</div>' : '') +
+    '</div>';
+  });
+  html += '</div></div></div>';
+
+  // Notes summary
+  if(allNotes.length > 0) {
+    var achieve = allNotes.filter(function(n){return n.n.type==='achieve';});
+    var remarks = allNotes.filter(function(n){return n.n.type==='remark';});
+    var ideas   = allNotes.filter(function(n){return n.n.type==='idea';});
+
+    html += '<div class="report-section"><div class="report-sec-hdr">📝 Заметки за месяц</div><div class="report-sec-body">';
+    var sections2 = [
+      {list:achieve, label:'⭐ Достижения', color:'#4ede8a'},
+      {list:remarks, label:'⚠️ Замечания',  color:'#ff5c7a'},
+      {list:ideas,   label:'💡 Идеи',       color:'#f0a44a'},
+    ];
+    sections2.forEach(function(sec) {
+      if(!sec.list.length) return;
+      html += '<div style="font-size:12px;font-weight:700;color:'+sec.color+';margin-bottom:8px;margin-top:12px">'+sec.label+' ('+sec.list.length+')</div>';
+      html += '<div class="report-notes-list">';
+      sec.list.forEach(function(item) {
+        html += '<div class="rn" style="border-left-color:'+sec.color+'">'+
+          '<div class="rn-body"><strong>'+esc(item.name)+'</strong>: '+esc(item.n.text||'')+'</div>'+
+          '<div class="rn-date">'+esc(item.n.date||'')+'</div>'+
+        '</div>';
+      });
+      html += '</div>';
+    });
+    html += '</div></div>';
+  }
+
+  container.innerHTML = html;
+}
+
+function printReport() {
+  if(!REPORT_DATA) { notify('warn','Сначала загрузи данные','Нажми «Загрузить из дашборда»',3000); return; }
+  window.print();
+}
+
 // ── FIREBASE ──────────────────────────────────────────────────────
-var fbRef=null,_fbTimeout=null,_lastFB=null;
+var fbRef=null,_fbTimeout=null,_lastFB=null,_localUpdate=false;
 var FB_CFG={
   apiKey:"AIzaSyB7Ean5vnuwP_a_oqjbBushwy-GSw-Obv8",
   authDomain:"manager-app-3a8cc.firebaseapp.com",
@@ -1012,6 +1269,7 @@ function initFB(){
     fbRef=db.ref('mgr_data');
     setSyncBadge('🔄 Подключение...','var(--amber)');
     fbRef.on('value',function(snap){
+      if(_localUpdate)return;
       var data=snap.val();
       if(!data){pushFB();return;}
       var str=JSON.stringify(data);
@@ -1035,10 +1293,17 @@ function initFB(){
 function pushFB(){
   if(!fbRef)return;
   clearTimeout(_fbTimeout);
+  _localUpdate=true;
   _fbTimeout=setTimeout(function(){
     var data={done:ST.done||{},cl:ST.cl||{},rems:ST.rems||{},_fired:ST._fired||{},kanban:ST.kanban||{todo:[],doing:[],done:[]},notes:ST.notes||[],notif:ST.notif||false,_ts:Date.now()};
     _lastFB=JSON.stringify(data);
-    fbRef.set(data).then(function(){setSyncBadge('✓ Синхронизировано','var(--green)');}).catch(function(){setSyncBadge('⚠️ Ошибка','var(--red)');});
+    fbRef.set(data).then(function(){
+      setSyncBadge('✓ Синхронизировано','var(--green)');
+      setTimeout(function(){_localUpdate=false;},500);
+    }).catch(function(){
+      setSyncBadge('⚠️ Ошибка','var(--red)');
+      _localUpdate=false;
+    });
   },800);
 }
 </script>
