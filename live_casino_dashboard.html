@@ -1555,6 +1555,12 @@ svExt = function() {
       // Replace EMP contents
       EMP.length = 0;
       saved.forEach(function(e) { EMP.push(e); });
+      // Ensure NO, ST, GRADES etc match new EMP length
+      while(NO.length < EMP.length) NO.push([]);
+      while(ST.length < EMP.length) ST.push(Array.from({length:6},()=>({tasks:[],tt:[],s:0,p:0,e:0,cm:''})));
+      if(typeof GRADES !== 'undefined') while(GRADES.length < EMP.length) GRADES.push('Мидл');
+      if(typeof RECS   !== 'undefined') while(RECS.length   < EMP.length) RECS.push('');
+      if(typeof CHARS  !== 'undefined') while(CHARS.length  < EMP.length) CHARS.push('');
     }
   } catch(e) {}
 })();
